@@ -9,7 +9,8 @@ function Create-ExecutableLink {
 		[String]$To,
 		# Where to create the link (a directory)
 		[String]$From = ".\",
-		[Switch]$CD
+		[Switch]$CD,
+		[Switch]$SymbolicLink
 	)
 
 	Process {
@@ -18,6 +19,16 @@ function Create-ExecutableLink {
 		$exe = Split-Path -Leaf $To
 		# remove extension (.exe, .bat, etc)
 		$exe = $exe.Substring(0, $exe.LastIndexOf("."))
+
+		If($SymbolicLink) {
+			New-Item -ItemType SymbolicLink `
+				-Path $From `
+				-Name (Split-Path -Leaf $To) `
+				-Value $To `
+				-ErrorAction SilentlyContinue |
+			Out-Null
+			return
+		}
 
 		$bat = ""
 
@@ -50,7 +61,8 @@ function Link-Executables {
 		# Where to create the links (a directory)
 		[String]$From = ".\",
 		[Switch]$DLLs,
-		[Switch]$CD
+		[Switch]$CD,
+		[Switch]$SymbolicLinks
 	)
 
 	Begin {
@@ -60,7 +72,8 @@ function Link-Executables {
 		}
 		$Arguments = @{
 			From = $From;
-			CD = $CD
+			CD = $CD;
+			SymbolicLink = $SymbolicLinks
 		}
 		Write-Output "Linking executables to $From"
 	}
@@ -74,15 +87,9 @@ function Link-Executables {
 			Create-ExecutableLink @Arguments
 
 			If($DLLs) {
-				# we need admin...
 				(Get-ChildItem "$todir\*" `
-					-Include *.dll) | %{
-					New-Item -ItemType SymbolicLink `
-					-Path $From `
-					-Name (Split-Path -Leaf $_) `
-					-Value $_ `
-					-ErrorAction SilentlyContinue
-				} | Out-Null
+					-Include *.dll) |
+				Create-ExecutableLink -SymbolicLink
 			}
 		}
 	}
