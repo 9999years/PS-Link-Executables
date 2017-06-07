@@ -4,6 +4,10 @@ Link-Executables is a Powershell script that creates `.bat` files for each file
 in a directory or directories matching `$PATHEXT`, so that your `$PATH` doesn’t
 grow obscenely large.
 
+It can also make symbolic links instead of `.bat`s, which is basically
+unambiguously better (if you have admin privileges!) but also means you can’t
+call the folder with all the links “the bat cave,” which unambiguously sucks.
+
 ## How to Use It
 
     $env:PATH.Split(";") | Link-Executables
