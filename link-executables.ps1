@@ -1,52 +1,3 @@
-function Create-ExecutableLink {
-	[CmdletBinding()]
-	Param(
-		# Where to point the link (an executable)
-		[Parameter(
-			ValueFromPipeline=$True,
-			Mandatory=$True
-		)]
-		[String]$To,
-		# Where to create the link (a directory)
-		[String]$From = ".\",
-		[Switch]$CD,
-		[Switch]$SymbolicLink
-	)
-
-	Process {
-		$To = Resolve-Path $To
-		# dest. exe name with no path
-		$exe = Split-Path -Leaf $To
-		# remove extension (.exe, .bat, etc)
-		$exe = $exe.Substring(0, $exe.LastIndexOf("."))
-
-		If($SymbolicLink) {
-			New-Item -ItemType SymbolicLink `
-				-Force -Path $From `
-				-Name (Split-Path -Leaf $To) `
-				-Value $To |
-			Out-Null
-			return
-		}
-
-		$bat = ""
-
-		If($CD) {
-			$bat = "@cd `"$(
-				Split-Path -Parent $To
-			)`"`n"
-		}
-		
-		$bat += "@`"$To`" %*"
-
-		[IO.File]::WriteAllLines(
-			$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$From\$exe.bat"),
-			$bat,
-			(New-Object System.Text.UTF8Encoding $False)
-		)
-	}
-}
-
 function Get-PotentialExecutables {
 	[CmdletBinding()]
 	Param(
@@ -76,39 +27,43 @@ function Get-PotentialExecutables {
 	}
 }
 
-function Link-Executables {
+function Regenerate-Links {
 	[CmdletBinding()]
 	Param(
-		# Director(ies) to search executables for
-		# Defaults to $PATH, excluding system32
 		[Parameter(
-			ValueFromPipeline=$True,
-			Mandatory=$True
-		)]
-		[String[]]$To,
-		# Where to create the links (a directory)
-		[String]$From = ".\",
-		[Switch]$DLLs,
-		[Switch]$CD,
-		[Switch]$BATs
+			HelpMessage="The path of a text file containing one directory of executables to link per line",
+			Mandatory=$True)]
+		[String]$BinDirectories
 	)
 
-	Begin {
-		$From = Resolve-Path $From
-		$Arguments = @{
-			From = $From;
-			CD = $CD;
-			SymbolicLink = !$BATs;
-		}
-		Write-Output "Linking executables to $From"
+	# ensure shimgen works
+	$helpersPath = "$($env:ChocolateyInstall)\helpers"
+	If(Test-Path $helpersPath) {
+		# https://github.com/chocolatey/choco/blob/stable/src/chocolatey.resources/helpers/chocolateyInstaller.psm1#L40
+		Get-Item "$helpersPath\functions\*.ps1" |
+			? { -not ($_.Name.Contains(".Tests.")) } |
+				ForEach-Object {
+					. $_.FullName
+				}
+	} Else {
+		Write-Error 'Chocolatey helper functions not found!'
 	}
 
-	Process {
-		ForEach($todir in $To) {
-			$todir = Resolve-Path $todir
-			Write-Output "Linking executables in $todir"
-			Get-PotentialExecutables $todir -DLLs:$DLLs |
-				Create-ExecutableLink @Arguments
+	$paths = (cat $BinDirectories)
+	ForEach($loc in $paths) {
+		$exes = Get-PotentialExecutables $loc
+		ForEach($exe in $exes) {
+			# make name like
+			# executable.exe => executable
+			# IF it has a dot
+			# split-path for
+			# full path => file name
+			$name = Split-Path $exe -Leaf
+			$last_dot = $name.LastIndexOf(".")
+			If($last_dot -ne -1) {
+				$name = $name.Substring(0, $last_dot)
+			}
+			Install-BinFile -Name $name -Path $exe
 		}
 	}
 }
