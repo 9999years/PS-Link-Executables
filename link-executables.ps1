@@ -22,10 +22,9 @@ function Create-ExecutableLink {
 
 		If($SymbolicLink) {
 			New-Item -ItemType SymbolicLink `
-				-Path $From `
+				-Force -Path $From `
 				-Name (Split-Path -Leaf $To) `
-				-Value $To `
-				-ErrorAction SilentlyContinue |
+				-Value $To |
 			Out-Null
 			return
 		}
@@ -48,6 +47,35 @@ function Create-ExecutableLink {
 	}
 }
 
+function Get-PotentialExecutables {
+	[CmdletBinding()]
+	Param(
+		# Director(ies) to search executables for
+		# Defaults to $PATH, excluding system32
+		[Parameter(
+			ValueFromPipeline=$True,
+			Mandatory=$True
+		)]
+		[String[]]$Directories,
+		[Switch]$DLLs
+	)
+
+	Begin {
+		$extensions = $env:PATHEXT.split(";") | %{
+			"*$_"
+		}
+		If($DLLs) {
+			$extensions += "*.dll"
+		}
+	}
+
+	Process {
+		ForEach($todir in $Directories) {
+			return Get-ChildItem "$todir\*" -Include $extensions
+		}
+	}
+}
+
 function Link-Executables {
 	[CmdletBinding()]
 	Param(
@@ -62,18 +90,15 @@ function Link-Executables {
 		[String]$From = ".\",
 		[Switch]$DLLs,
 		[Switch]$CD,
-		[Switch]$SymbolicLinks
+		[Switch]$BATs
 	)
 
 	Begin {
 		$From = Resolve-Path $From
-		$extensions = $env:PATHEXT.split(";") | %{
-			"*$_"
-		}
 		$Arguments = @{
 			From = $From;
 			CD = $CD;
-			SymbolicLink = $SymbolicLinks
+			SymbolicLink = !$BATs;
 		}
 		Write-Output "Linking executables to $From"
 	}
@@ -82,15 +107,8 @@ function Link-Executables {
 		ForEach($todir in $To) {
 			$todir = Resolve-Path $todir
 			Write-Output "Linking executables in $todir"
-			(Get-ChildItem "$todir\*" `
-				-Include $extensions) |
-			Create-ExecutableLink @Arguments
-
-			If($DLLs) {
-				(Get-ChildItem "$todir\*" `
-					-Include *.dll) |
-				Create-ExecutableLink -SymbolicLink
-			}
+			Get-PotentialExecutables $todir -DLLs:$DLLs |
+				Create-ExecutableLink @Arguments
 		}
 	}
 }
