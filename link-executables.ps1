@@ -31,10 +31,17 @@ function Regenerate-Links {
 	[CmdletBinding()]
 	Param(
 		[Parameter(
-			HelpMessage="The path of a text file containing one directory of executables to link per line",
-			Mandatory=$True)]
-		[String]$BinDirectories
+			HelpMessage="The path of a text file containing one directory of executables to link per line")]
+		[AllowEmptyString()]
+		[String]$BinDirectories = ""
 	)
+
+	If(($BinDirectories -eq "") -and
+		($FakePathsTxt -ne "")) {
+		$BinDirectories = $FakePathsTxt
+	} Else {
+		$BinDirectories = "\utils\regen\paths.txt"
+	}
 
 	# ensure shimgen works
 	$helpersPath = "$($env:ChocolateyInstall)\helpers"
